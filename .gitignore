@@ -5,6 +5,7 @@ src/main/java/frc/robot/BuildConstants.java
 ### C++ ###
 # Prerequisites
 *.d
+*.dat
 
 # Compiled Object files
 *.slo
