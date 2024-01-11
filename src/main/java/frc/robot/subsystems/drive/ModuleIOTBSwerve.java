@@ -20,6 +20,7 @@ import com.ctre.phoenix6.StatusSignal;
 import com.ctre.phoenix6.configs.CANcoderConfiguration;
 import com.ctre.phoenix6.configs.MotorOutputConfigs;
 import com.ctre.phoenix6.configs.TalonFXConfiguration;
+import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.CANcoder;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.InvertedValue;
@@ -44,7 +45,7 @@ import frc.robot.Constants;
  * absolute encoders using AdvantageScope. These values are logged under
  * "/Drive/ModuleX/TurnAbsolutePositionRad"
  */
-public class ModuleIOSparkMax implements ModuleIO {
+public class ModuleIOTBSwerve implements ModuleIO {
   // Gear ratios for SDS MK4i L2, adjust as necessary
   private static final double DRIVE_GEAR_RATIO = (50.0 / 14.0) * (17.0 / 27.0) * (45.0 / 15.0);
   private static final double TURN_GEAR_RATIO = 150.0 / 7.0;
@@ -65,38 +66,42 @@ public class ModuleIOSparkMax implements ModuleIO {
   private final boolean isTurnMotorInverted = true;
   private final Rotation2d absoluteEncoderOffset;
 
-  public ModuleIOSparkMax(int index) {
+  public ModuleIOTBSwerve(int index) {
     switch (index) {
       case 0:
         driveTalon = new TalonFX(Constants.FRONT_LEFT_DRIVE_MOTOR);
+        driveTalon.setInverted(Constants.FRONT_LEFT_DRIVE_MOTOR_INVERTED);
         turnSparkMax = new CANSparkMax(Constants.FRONT_LEFT_STEER_MOTOR, MotorType.kBrushless);
         cancoder = new CANcoder(Constants.FRONT_LEFT_STEER_ENCODER);
-        absoluteEncoderOffset = new Rotation2d(0.0); // MUST BE CALIBRATED
+        absoluteEncoderOffset = new Rotation2d(Constants.FRONT_LEFT_STEER_OFFSET); 
         break;
       case 1:
         driveTalon = new TalonFX(Constants.FRONT_RIGHT_DRIVE_MOTOR);
+        driveTalon.setInverted(Constants.FRONT_LEFT_DRIVE_MOTOR_INVERTED);
         turnSparkMax = new CANSparkMax(Constants.FRONT_RIGHT_STEER_MOTOR, MotorType.kBrushless);
         cancoder = new CANcoder(Constants.FRONT_RIGHT_STEER_ENCODER);
-        absoluteEncoderOffset = new Rotation2d(0.0); // MUST BE CALIBRATED
+        absoluteEncoderOffset = new Rotation2d(Constants.FRONT_RIGHT_STEER_OFFSET); 
         break;
       case 2:
         driveTalon = new TalonFX(Constants.BACK_LEFT_DRIVE_MOTOR);
+        driveTalon.setInverted(Constants.BACK_LEFT_DRIVE_MOTOR_INVERTED);
         turnSparkMax = new CANSparkMax(Constants.BACK_LEFT_STEER_MOTOR, MotorType.kBrushless);
         cancoder = new CANcoder(Constants.BACK_LEFT_STEER_ENCODER);
-        absoluteEncoderOffset = new Rotation2d(0.0); // MUST BE CALIBRATED
+        absoluteEncoderOffset = new Rotation2d(Constants.BACK_LEFT_STEER_OFFSET); 
         break;
       case 3:
         driveTalon = new TalonFX(Constants.BACK_RIGHT_DRIVE_MOTOR);
+        driveTalon.setInverted(Constants.BACK_RIGHT_DRIVE_MOTOR_INVERTED);
         turnSparkMax = new CANSparkMax(Constants.BACK_RIGHT_STEER_MOTOR, MotorType.kBrushless);
         cancoder = new CANcoder(Constants.BACK_RIGHT_STEER_ENCODER);
-        absoluteEncoderOffset = new Rotation2d(0.0); // MUST BE CALIBRATED
+        absoluteEncoderOffset = new Rotation2d(Constants.BACK_RIGHT_STEER_OFFSET); 
         break;
       default:
         throw new RuntimeException("Invalid module index");
     }
 
     var driveConfig = new TalonFXConfiguration();
-    driveConfig.CurrentLimits.StatorCurrentLimit = 40.0;
+    driveConfig.CurrentLimits.StatorCurrentLimit = Constants.DRIVE_CURRENT_LIMIT;
     driveConfig.CurrentLimits.StatorCurrentLimitEnable = true;
     driveTalon.getConfigurator().apply(driveConfig);
     setDriveBrakeMode(true);
@@ -109,7 +114,7 @@ public class ModuleIOSparkMax implements ModuleIO {
     turnRelativeEncoder = turnSparkMax.getEncoder();
 
     turnSparkMax.setInverted(isTurnMotorInverted);
-    turnSparkMax.setSmartCurrentLimit(30);
+    turnSparkMax.setSmartCurrentLimit(Constants.TURN_CURRENT_LIMIT);
     turnSparkMax.enableVoltageCompensation(12.0);
 
     drivePosition = driveTalon.getPosition();
@@ -165,11 +170,18 @@ public class ModuleIOSparkMax implements ModuleIO {
             / TURN_GEAR_RATIO;
     inputs.turnAppliedVolts = turnSparkMax.getAppliedOutput() * turnSparkMax.getBusVoltage();
     inputs.turnCurrentAmps = new double[] {turnSparkMax.getOutputCurrent()};
+
+    inputs.odometryDrivePositionsRad =
+        drivePositionQueue.stream()
+            .mapToDouble((Double value) -> Units.rotationsToRadians(value) / DRIVE_GEAR_RATIO)
+            .toArray();
+    drivePositionQueue.clear();
+
   }
 
   @Override
   public void setDriveVoltage(double volts) {
-    driveTalon.setVoltage(volts);
+    driveTalon.setControl(new VoltageOut(volts));
   }
 
   @Override
